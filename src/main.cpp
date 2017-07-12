@@ -31,6 +31,12 @@ std::string hasData(std::string s) {
 
 int main()
 {
+  // for debugging
+  std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::trunc);
+  ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
+       "i_contrib "<<"speed "<<"theta_to_desired_traj"<<std::endl<<std::endl;
+  ofs.close();
+
   uWS::Hub h;
 
   PID pid;
@@ -48,6 +54,9 @@ int main()
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
+          // debugging
+          std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::app);
+
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
@@ -77,6 +86,9 @@ int main()
           
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
+               pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
+          ofs.close();
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
