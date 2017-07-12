@@ -13,9 +13,8 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
-// for debugging
+// DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
 std::ofstream ofs;
-int steps;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -35,17 +34,15 @@ std::string hasData(std::string s) {
 
 int main()
 {
+  // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
   ofs.open("pid_output.txt", std::ios::out);
   ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
        "i_contrib "<<"speed "<<"theta_to_desired_traj";
-  // for (int i = 0; i < 3; i++)
-    // ofs<<"\r\n testing";
-  // ofs.close();
 
   uWS::Hub h;
 
+  // create and initialize pid object for steering
   PID pid;
-  // TODO: Initialize the pid variable.
   pid.Init(.13, 0, .75);
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
@@ -59,55 +56,53 @@ int main()
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
-          // debugging
-          // std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::app);
-
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
+          double speed_error;
           double throttle;
-          /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
-          * another PID controller to control the speed!
-          */
+          PID speed_pid;                  // only using P, doesn't need memory
+
+          // additional parameters
+          double max_steer = M_PI / 5.0;
+          double desired_speed = 35.0;
+          // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
+          int steps_to_save = 100;
+
+          // calculate steer_value
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
-          PID speed_pid;
+          // calculate throttle
           speed_pid.Init(0.1, 0, 0);
-
-          double desired_speed = 35.0;
-          double speed_error = speed - desired_speed;
-
+          speed_error = speed - desired_speed;
           speed_pid.UpdateError(speed_error);
           throttle = speed_pid.TotalError();
-          // if (speed == 50) {
-            // throttle = 0;
-          // } else {
-            // throttle = 0.5;
-          // }
 
-          if (steer_value > (M_PI / 5) ) {
-            steer_value = M_PI / 5;
-          } else if (steer_value < -(M_PI / 5) ){
-            steer_value = -M_PI / 5;
+          // limit steering value
+          if (steer_value > (max_steer) ) {
+            steer_value = max_steer;
+          } else if (steer_value < -(max_steer) ){
+            steer_value = -max_steer;
           }
           
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
-          ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
-               pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
-          if (steps == 100) {
+          // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
+          int steps = 0;
+          if (steps < steps_to_save) {
+            ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<
+                 cte*pid.Kp<<" "<<pid.d_error*pid.Kd<< " "<<
+                 pid.i_error*pid.Ki<< " "<<speed;
+          } else if (steps == 100){
             for (int i = 0; i < 25; i++) {
               std::cout<<"____________________________________________________________________\n";
             }
-            ofs.close();  
+            ofs.close();
           }
           steps++;
+          
+          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
