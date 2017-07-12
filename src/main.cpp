@@ -13,6 +13,10 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+// for debugging
+std::ofstream ofs;
+int steps;
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -31,17 +35,18 @@ std::string hasData(std::string s) {
 
 int main()
 {
-  // for debugging
-  std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::trunc);
+  ofs.open("pid_output.txt", std::ios::out);
   ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
-       "i_contrib "<<"speed "<<"theta_to_desired_traj"<<std::endl<<std::endl;
-  ofs.close();
+       "i_contrib "<<"speed "<<"theta_to_desired_traj";
+  // for (int i = 0; i < 3; i++)
+    // ofs<<"\r\n testing";
+  // ofs.close();
 
   uWS::Hub h;
 
   PID pid;
   // TODO: Initialize the pid variable.
-  pid.Init(.13, 0, .715);
+  pid.Init(.13, 0, .75);
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -55,7 +60,7 @@ int main()
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
           // debugging
-          std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::app);
+          // std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::app);
 
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
@@ -72,11 +77,19 @@ int main()
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
-          if (speed == 50) {
-            throttle = 0;
-          } else {
-            throttle = 0.3;
-          }
+          PID speed_pid;
+          speed_pid.Init(0.1, 0, 0);
+
+          double desired_speed = 35.0;
+          double speed_error = speed - desired_speed;
+
+          speed_pid.UpdateError(speed_error);
+          throttle = speed_pid.TotalError();
+          // if (speed == 50) {
+            // throttle = 0;
+          // } else {
+            // throttle = 0.5;
+          // }
 
           if (steer_value > (M_PI / 5) ) {
             steer_value = M_PI / 5;
@@ -88,7 +101,13 @@ int main()
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
           ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
                pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
-          ofs.close();
+          if (steps == 100) {
+            for (int i = 0; i < 25; i++) {
+              std::cout<<"____________________________________________________________________\n";
+            }
+            ofs.close();  
+          }
+          steps++;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
