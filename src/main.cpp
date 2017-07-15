@@ -1,9 +1,20 @@
+/*
+Best value so far depending on speed
+Max Speed: 40mph
+Kp: 0.13
+Ki: 0
+Kd: 0.75
+*/
+
+
+
 #include <uWS/uWS.h>
 #include <iostream>
 #include "json.hpp"
 #include "PID.h"
 #include <math.h>
 #include <fstream>
+#include <numeric>
 
 // for convenience
 using json = nlohmann::json;
@@ -13,8 +24,34 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+int steps = 1;
+double p[3] = {0.08, 0.0, 0.45};
+double best_err = 9999999999999999.9;
+int twid_index = 0;
+double dp[3] = {0.1,0.1,0.1};
+
 // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
 std::ofstream ofs;
+
+// for resetting sim
+void reset_sim (PID robot, double coeff[3], uWS::WebSocket<uWS::SERVER> webs) {
+  // write coefficients to file
+  ofs.open("coefficients.txt", std::ios::out | std::ios::trunc);
+  ofs<< p[0] <<","<< p[1] <<","<< p[2] <<"\r\n";
+  ofs<< dp[0] <<","<< dp[1] <<","<< dp[2];
+  ofs.close();
+  // reset sim
+  std::string msg = "42[\"reset\",{}]";
+  webs.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
+  // reset robot
+  robot.Init(coeff);
+
+  // increment index
+  twid_index = (twid_index + int(1)) % 3;
+}
+
+
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -35,15 +72,15 @@ std::string hasData(std::string s) {
 int main()
 {
   // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
-  ofs.open("pid_output.txt", std::ios::out);
-  ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
-       "i_contrib "<<"speed "<<"theta_to_desired_traj";
+  // ofs.open("pid_output.txt", std::ios::out);
+  // ofs<<"cte,"<<"delta_cte,"<<"total_cte,"<<"p_contrib,"<<"d_contrib,"<<
+  //      "i_contrib,"<<"speed,"<<"theta_to_desired_traj,";
 
   uWS::Hub h;
 
   // create and initialize pid object for steering
   PID pid;
-  pid.Init(.13, 0, .75);
+  pid.Init(p);
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -67,16 +104,19 @@ int main()
 
           // additional parameters
           double max_steer = M_PI / 5.0;
-          double desired_speed = 35.0;
+          double desired_speed = 45.0;
+          double twiddle_steps = 1200;
+          double twiddle_thres = 0.005;
           // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
-          int steps_to_save = 100;
+          // int steps_to_save = 100;
 
           // calculate steer_value
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
           // calculate throttle
-          speed_pid.Init(0.1, 0, 0);
+          double s[3] = {0.2,0,0};
+          speed_pid.Init(s);
           speed_error = speed - desired_speed;
           speed_pid.UpdateError(speed_error);
           throttle = speed_pid.TotalError();
@@ -87,20 +127,62 @@ int main()
           } else if (steer_value < -(max_steer) ){
             steer_value = -max_steer;
           }
-          
-          // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
-          int steps = 0;
-          if (steps < steps_to_save) {
-            ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<
-                 cte*pid.Kp<<" "<<pid.d_error*pid.Kd<< " "<<
-                 pid.i_error*pid.Ki<< " "<<speed;
-          } else if (steps == 100){
-            for (int i = 0; i < 25; i++) {
-              std::cout<<"____________________________________________________________________\n";
+
+          // twiddle after steps steps and if sum of p is > 0.2
+          if (steps == twiddle_steps) {
+            
+            // update tau values
+            if (pid.i_error < best_err) {
+              best_err = pid.i_error;
+              if (std::accumulate(std::begin(dp), std::end(dp), 0.0, std::plus<double>()) > twiddle_thres) {
+                reset_sim(pid, p, ws);
+                steps = 0;
+              }
+              p[twid_index] += dp[twid_index];
+              dp[twid_index] *= 1.1;
+            } else {
+              p[twid_index] -= 2*dp[twid_index];
+              if (std::accumulate(std::begin(dp), std::end(dp), 0.0, std::plus<double>()) > twiddle_thres) {
+                reset_sim(pid, p, ws);
+              }
             }
-            ofs.close();
           }
+          if (steps == 2*twiddle_steps) {
+            
+            // update tau values
+            if (pid.i_error < best_err) {
+              best_err = pid.i_error;
+              dp[twid_index] *= 1.1;
+              if (std::accumulate(std::begin(dp), std::end(dp), 0.0, std::plus<double>()) > twiddle_thres) {
+                reset_sim(pid, p, ws);
+                steps = 0;
+              }
+              p[twid_index] += dp[twid_index];
+
+            } else {
+              dp[twid_index] *= 0.9;
+              if (std::accumulate(std::begin(dp), std::end(dp), 0.0, std::plus<double>()) > twiddle_thres) {
+                reset_sim(pid, p, ws);
+                steps = 0;
+              }
+              p[twid_index] -= 2*dp[twid_index];
+            }
+          }
+          
           steps++;
+          // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
+          // int steps = 0;
+          // if (steps < steps_to_save) {
+          //   ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<
+          //        cte*pid.Kp<<" "<<pid.d_error*pid.Kd<< " "<<
+          //        pid.i_error*pid.Ki<< " "<<speed;
+          // } else if (steps == 100){
+          //   for (int i = 0; i < 25; i++) {
+          //     std::cout<<"____________________________________________________________________\n";
+          //   }
+          //   ofs.close();
+          // }
+          // steps++;
           
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 

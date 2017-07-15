@@ -17,6 +17,8 @@ public:
   double Ki;
   double Kd;
 
+  // Twiddle 
+  double dp[3];
   /*
   * Constructor
   */
@@ -30,7 +32,7 @@ public:
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void Init(double K[3]);
 
   /*
   * Update the PID error variables given cross track error.
