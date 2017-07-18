@@ -131,7 +131,7 @@ int main()
             if (total_dp < twiddle_thres) {
               is_twiddle = false;
               pid.Init(pid.best_params);
-              cout<<"Twiddle turned off. Running with params"
+              std::cout<<"Twiddle turned off. Running with params";
             }
             reset_sim(ws);
             std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
