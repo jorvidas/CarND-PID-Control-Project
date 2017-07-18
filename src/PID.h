@@ -18,21 +18,41 @@ public:
   */ 
   double K[3];
 
-  // Twiddle 
+  /*
+  * TWIDDLE
+  */
+  // amount to adjust coefficients by
   double dp[3];
+  // saves best coefficients to run after twiddle completes
+  double best_coeffs[3];
+  // sum of squared errors
   double ss_error;
-  double best_error;
-  int steps;
-  int index;
-  int check;
-  double best_coeff[3];
-  int untracked_steps;
-  int min_tracked_steps;
-  double correct_dp_increase;
-  double incorrect_dp_decrease;
-  double max_cte;
+  // normalized by the number of steps, can compare two parameter sets that do
+  // not complete
   double normalized_ss_error;
-  double best_params[3];
+  // stores best normalized_ss_error
+  double best_error;
+  // tracks furthest distance the car strays from center, another way to view
+  // error
+  double max_cte;
+  // tracks the number of steps taken
+  int steps;
+  // next parameter to tune
+  int index;
+  // controls add/sub adjustment of parameter
+  int check;
+  // allows for initial steps not to be counted in ss_error
+  int untracked_steps;
+  // minimum number of steps beyond initial untracked steps for error to count
+  // reconciled some early reset issues, likely no longer needed
+  int min_tracked_steps;
+  // for tuning of twiddle, should be > 1
+  double correct_dp_increase;
+  // for tuning of twiddle, should be < 1
+  double incorrect_dp_decrease;
+
+
+
 
   /*
   * Constructor
@@ -65,13 +85,26 @@ public:
   void Twiddle();
 
   /*
-  * Saves coefficients of best fit
+  * Saves coefficients of best fit and prints to terminal
   */
   void SaveCoefficients();
 
+  /*
+  * First check in twiddle to see if error was better
+  */
   bool CheckBetter();
 
+  /*
+  * Prints previous errors and resets all error variables except best error in
+  * anticipation of new parameters to test
+  */
   void ResetErrors();
+
+  /*
+  * Resets sim and twiddle variables when car gets too far from center. 
+  * adds a large number to ss_error to ensure its not picked over a 
+  * parameter set that completes twiddle_steps
+  */
   void EarlyReset(int twiddle_steps);
 };
 

@@ -59,14 +59,32 @@ int main()
 
   uWS::Hub h;
 
-  // create and initialize pid object for steering
-  PID pid;
-  double p[3] = {0.11345, 0.0064979, 0.77021};
-  pid.Init(p);
-  double total_dp = 1e8;
-  bool is_twiddle = true;
+  /*
+  * TUNABLE PID PARAMTERS
+  */
 
-  h.onMessage([&pid, &total_dp, &is_twiddle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  // for steering pid
+  double p[3] = {0.10549, 0.0064979, 0.802286};
+  // for speed pid
+  double s[3] = {0.3,0,0.5};
+
+  /*
+  * OTHER INITIALIZATIONS
+  */
+
+  // create and initialize pid objectd for steering (pid) and speed (speed_pid)
+  PID pid;
+  pid.Init(p);
+  PID speed_pid;
+  speed_pid.Init(s);
+
+  // true if you want to tune steering paramters
+  bool is_twiddle = true;
+  // tracks sum(dp) to turn off twiddle
+  double total_dp = 1e8;
+
+
+  h.onMessage([&pid, &total_dp, &is_twiddle, &speed_pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -84,18 +102,34 @@ int main()
           double steer_value;
           double speed_error;
           double throttle;
-          PID speed_pid;                  // only using P, doesn't need memory
 
-          // additional parameters
+          /*
+          * TUNABLE PARAMETERS
+          */
+
+          // used to limit steering angles
           // double max_steer = M_PI / 5.0;
+
+          // used by speed_pid for target speed
           double desired_speed = 40.0;
+
+          // number of steps before sim restarts with new paramters
           double twiddle_steps = 1525;
+          // twiddle continues until sum of dp is less than the twiddle thres
           double twiddle_thres = 0.005;
+          // limits how far a car can stray from the center of the road on a
+          // successful run
           double max_allowed_cte = 2.2;
+          // limits the number of steps before sim will restart and change
+          // paramters. this is meant to avoid multiple restarts if messages
+          // come in to quickly
           double min_steps = 15;
 
           // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
           // int steps_to_save = 100;
+
+          // filters out parameter sets that go off track but may have better
+          // normalized_ss_error
           if ((pid.steps > min_steps) && (fabs(cte) > max_allowed_cte) && (is_twiddle)) {
             pid.EarlyReset(twiddle_steps);
             reset_sim(ws);
@@ -103,41 +137,59 @@ int main()
             std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
                      <<" (D) "<<pid.K[2]<<std::endl;
             std::cout<< "Total DP:" << total_dp<< std::endl;
-            // std::cout<< "Errors: (P) "<< pid.p_error<<" (I) "<<pid.i_error<<" (D) "<<pid.d_error<<std::endl;
             return;
           }
-          // calculate steer_value
+
+          /*
+          * CALCULATE STEER VALUE
+          */
+
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
-          // calculate throttle
-          double s[3] = {1,0,0};
-          speed_pid.Init(s);
+          /*
+          * CALCULATE THROTTLE
+          */
+
           speed_error = speed - desired_speed;
           speed_pid.UpdateError(speed_error);
           throttle = speed_pid.TotalError();
+          // release gas instead of breaking if you go over desired_speed
+          if (throttle < 0.0) {throttle = 0.0;}
 
-          // limit steering value
+          /* 
+          * LIMIT STEERING ANGLE
+          */
+
           // if (steer_value > (max_steer) ) {
           //   steer_value = max_steer;
           // } else if (steer_value < -(max_steer) ){
           //   steer_value = -max_steer;
           // }
 
-          //twiddle
-          if ((pid.steps == twiddle_steps) && (is_twiddle)) {
+          /*
+          * TWIDDLE
+          */
+
+          // twiddle after twiddle_steps until sum(dp) < twiddle_thres.
+          // the two conditions are trying to avoid issues sometimes caused by
+          // data flow to h.onMessage causing missed restarts or double
+          // restarts.
+          if ( ((pid.steps == twiddle_steps) && (is_twiddle)) ||
+               ((pid.steps > (twiddle_steps + 50)) && (is_twiddle)) ) {
             pid.Twiddle();
             total_dp = (std::accumulate(std::begin(pid.dp), std::end(pid.dp), 0.0, std::plus<double>()));
+            // stop twiddling and set to best parameters after twiddle_thres is
+            // met
             if (total_dp < twiddle_thres) {
               is_twiddle = false;
-              pid.Init(pid.best_params);
+              pid.Init(pid.best_coeffs);
               std::cout<<"Twiddle turned off. Running with params";
             }
             reset_sim(ws);
             std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
                      <<" (D) "<<pid.K[2]<<std::endl;
             std::cout<< "Total DP:" << total_dp<< std::endl;
-            // std::cout<< "Errors: (P) "<< pid.p_error<<" (I) "<<pid.i_error<<" (D) "<<pid.d_error<< std::endl;
           }
 
           // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***

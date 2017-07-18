@@ -11,9 +11,9 @@ using namespace std;
 */
 
 PID::PID() {
-  dp[0] = 0.00605;
-  dp[1] = 0.00198;
-  dp[2] = 0.044;
+  dp[0] = 0.00528328;
+  dp[1] = 0.00115748;
+  dp[2] = 0.0257217;
 
   untracked_steps = 100;
   min_tracked_steps = 100;
@@ -39,7 +39,6 @@ void PID::Init(double p[]) {
   p_error = 0.0;
   i_error = 0.0;
   d_error = 0.0;
-
   ss_error = 0.0;
 }
 
@@ -47,13 +46,13 @@ void PID::UpdateError(double cte) {
   i_error += cte;
   d_error = cte - p_error;
   p_error = cte;
-  if (steps > min_tracked_steps) {ss_error += cte*cte;}
-  if (cte > max_cte && steps > min_tracked_steps) {max_cte = cte;}
+  if (steps > untracked_steps) {ss_error += cte*cte;}
+  if (cte > max_cte && steps > untracked_steps) {max_cte = cte;}
   steps++;
 }
 
 void PID::ResetErrors() {
-  cout<<"Previous normalized error: "<<normalized_ss_error<<"  Best:"<<best_error<<endl;
+  cout<<"Normalized error: "<<normalized_ss_error<<"  Best:"<<best_error<<endl;
   cout<<"Max CTE: "<< max_cte<<std::endl;
   p_error = 0.0;
   i_error = 0.0;
@@ -84,7 +83,7 @@ bool PID::CheckBetter() {
 }
 
 void PID::SaveCoefficients() {
-  std::copy(std::begin(K), std::end(K), std::begin(best_params));
+  std::copy(std::begin(K), std::end(K), std::begin(best_coeffs));
   ofstream ofs("best_coeff.txt", ios::out| ios::app);
   ofs<<"Coefficients: (P) "<<K[0]<<" (I) "<<K[1]<<" (D) "<<K[2]<<"\r\n";
   ofs<<"DP: (P) "<<dp[0]<<" (I) "<<dp[1]<<" (D) "<<dp[2]<<"\r\n";
@@ -93,12 +92,15 @@ void PID::SaveCoefficients() {
 }
 
 void PID::Twiddle() {
+  // normalizes the sum of squared errors if the minimum number of tracked
+  // steps is met, otherwise sets ss_errors to a large value
   if (steps > (untracked_steps + min_tracked_steps)) {
     normalized_ss_error = ss_error / (steps - untracked_steps);
   } else {
     ss_error = 1e8;
   }
 
+  // for the first run through
   if (check == 0) {
     best_error = normalized_ss_error;
     SaveCoefficients();
@@ -109,6 +111,7 @@ void PID::Twiddle() {
     return;
   }
 
+  // checks parameter increase for new best, otherwise decreases parameter
   if (check == 1) {
     if (CheckBetter() == true) {
       return;
@@ -120,6 +123,8 @@ void PID::Twiddle() {
     }
   }
 
+  // checks parameter decrease for new best, otherwise resets parameter and
+  // increase the nex parameter to be tuned
   if (check == 2) {
     if (CheckBetter() == true) {
       check = 1;
