@@ -45,7 +45,7 @@ int main()
 
   PID pid;
   // TODO: Initialize the pid variable.
-  pid.Init(.13, 0, .715);
+  pid.Init(0.119339, 0.00881286, 0.828008);
 
   // create and initialize speed pid for controlling throttle
   PID speed_pid;
