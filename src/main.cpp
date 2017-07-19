@@ -43,8 +43,8 @@ int main()
   // only. this will be a dynamic calculation of speed based on steering angle
   double desired_speed = 60.0;
 
+  // create and initialize steering pid for controlling steer angle
   PID pid;
-  // TODO: Initialize the pid variable.
   pid.Init(0.119339, 0.00881286, 0.828008);
 
   // create and initialize speed pid for controlling throttle
@@ -88,11 +88,9 @@ int main()
           double approx_max_steering_angle = 12.0;
 
           /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
-          * another PID controller to control the speed!
+          * CALCULATE STEER VALUE
           */
+          
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
