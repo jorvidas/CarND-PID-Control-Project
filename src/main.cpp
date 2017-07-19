@@ -32,18 +32,26 @@ std::string hasData(std::string s) {
 int main()
 {
   // for debugging
-  std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::trunc);
-  ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
-       "i_contrib "<<"speed "<<"theta_to_desired_traj"<<std::endl<<std::endl;
-  ofs.close();
+  // std::ofstream ofs ("pid_output.txt", std::ios::out | std::ios::trunc);
+  // ofs<<"cte "<<"delta_cte "<<"total_cte "<<"p_contrib "<<"d_contrib "<<
+  //      "i_contrib "<<"speed "<<"theta_to_desired_traj"<<std::endl<<std::endl;
+  // ofs.close();
 
   uWS::Hub h;
+
+  // dynamic target speed for speed pid - 60.0 is for the first calculation
+  // only. this will be a dynamic calculation of speed based on steering angle
+  double desired_speed = 60.0;
 
   PID pid;
   // TODO: Initialize the pid variable.
   pid.Init(.13, 0, .715);
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  // create and initialize speed pid for controlling throttle
+  PID speed_pid;
+  speed_pid.Init(0.3, 0, 0.5);
+
+  h.onMessage([&pid, &speed_pid, &desired_speed](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -62,7 +70,23 @@ int main()
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
+          double speed_error;
           double throttle;
+
+          /*
+          * TUNABLE PARAMETERS
+          */
+
+          // used by speed_pid for target speed
+          double max_speed = 45.0;
+
+          // for slowing down during turns
+          double min_turn_speed = 35.0;
+
+          // for calculating amount to slow - will target min turn speed
+          // at/above this number
+          double approx_max_steering_angle = 12.0;
+
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
@@ -72,17 +96,27 @@ int main()
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
 
-          if (speed == 50) {
-            throttle = 0;
-          } else {
-            throttle = 0.3;
-          }
+          /*
+          * CALCULATE THROTTLE
+          */
+
+          // slow down on turns
+          desired_speed = max_speed - (max_speed - min_turn_speed) *
+          fabs(angle/approx_max_steering_angle);
+          // dont go below min speed if angle is larger than approx max
+          if (desired_speed < min_turn_speed) {desired_speed = min_turn_speed;}      
+          speed_error = speed - desired_speed;
+          speed_pid.UpdateError(speed_error);
+          throttle = speed_pid.TotalError();
+          // release gas instead of breaking if you go slightly over max_speed
+          // still break if steering angle requires slowing down
+          if ( (throttle < 0.0) && (throttle > (3*s[1])) ) {throttle = 0.0;}
           
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
-          ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
-               pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
-          ofs.close();
+          // // DEBUG
+          // std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          // ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
+          //      pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
+          // ofs.close();
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
