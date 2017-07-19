@@ -77,12 +77,6 @@ int main()
           } else {
             throttle = 0.3;
           }
-
-          if (steer_value > (M_PI / 5) ) {
-            steer_value = M_PI / 5;
-          } else if (steer_value < -(M_PI / 5) ){
-            steer_value = -M_PI / 5;
-          }
           
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
