@@ -1,10 +1,5 @@
-/*
-Best value so far depending on speed
-Max Speed: 40mph
-Kp: 0.13
-Ki: 0
-Kd: 0.75
-*/
+// For quality = fastest
+// and Resolution = max
 
 #include <uWS/uWS.h>
 #include "json.hpp"
@@ -59,7 +54,7 @@ int main()
 
   // coefficients for steering pid
   // double p[3] = {0.110773, 0.00765538, 0.802286};
-  double p[3] = {0.119339, 0.00881286, 0.828008};
+  double p[3] = {0.31051, 0.000938289, 4.22214};
   // coefficients for speed pid
   double s[3] = {0.3,0,0.5};
   // dynamic target speed for speed pid
@@ -104,21 +99,18 @@ int main()
           * TUNABLE PARAMETERS
           */
 
-          // used to limit steering angles
-          // double max_steer = M_PI / 5.0;
-
           // used by speed_pid for target speed
           double max_speed = 45.0;
 
           // number of steps before sim restarts with new paramters
-          int twiddle_steps = 1525;
+          int twiddle_steps = 3500;
 
           // twiddle continues until sum of dp is less than the twiddle thres
-          double twiddle_thres = 0.01;
+          double twiddle_thres = 0.1;
 
           // limits how far a car can stray from the center of the road on a
           // successful run
-          double max_allowed_cte = 2.5;
+          double max_allowed_cte = 2.6;
 
           // limits the number of steps before sim will restart and change
           // paramters. this is meant to avoid multiple restarts if messages
@@ -158,16 +150,6 @@ int main()
           // still break if steering angle requires slowing down
           if ( (throttle < 0.0) && (throttle > (3*s[1])) ) {throttle = 0.0;}
 
-          /* 
-          * LIMIT STEERING ANGLE
-          */
-
-          // if (steer_value > (max_steer) ) {
-          //   steer_value = max_steer;
-          // } else if (steer_value < -(max_steer) ){
-          //   steer_value = -max_steer;
-          // }
-
           /*
           * TWIDDLE
           */
@@ -183,14 +165,6 @@ int main()
                      <<" (D) "<<pid.K[2]<<std::endl;
             std::cout<< "Total DP :" << total_dp<< std::endl;
             return;
-          }
-
-          // sometimes theres an issue with the restart and it gives a low
-          // error. this catches those
-          if ((pid.steps > (twiddle_steps + 150)) && (is_twiddle)) {
-            reset_sim(ws);
-            pid.steps = 0;
-            std::cout<<"RESTARTED EARLY - NO TWIDDLE"<<std::endl;
           }
 
           // twiddle after twiddle_steps until sum(dp) < twiddle_thres.

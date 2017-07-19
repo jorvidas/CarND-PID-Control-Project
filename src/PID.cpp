@@ -7,9 +7,9 @@ using namespace std;
 */
 
 PID::PID() {
-  dp[0] = 0.00328328;
-  dp[1] = 0.00115748;
-  dp[2] = 0.0157217;
+  dp[0] = 0.18;
+  dp[1] = 0.01;
+  dp[2] = 2.11;
 
   untracked_steps = 100;
   min_tracked_steps = 100;
@@ -83,7 +83,7 @@ void PID::SaveCoefficients() {
   ofstream ofs("best_coeff.txt", ios::out| ios::app);
   ofs<<"Coefficients: (P) "<<K[0]<<" (I) "<<K[1]<<" (D) "<<K[2]<<"\r\n";
   ofs<<"DP: (P) "<<dp[0]<<" (I) "<<dp[1]<<" (D) "<<dp[2]<<"\r\n";
-  ofs<<"Best error: "<<best_error<<"\r\n\r\n";
+  ofs<<"Best error: "<<best_error<<"   Max CTE: "<<max_cte<<"\r\n\r\n";
   ofs.close();
 }
 
@@ -112,6 +112,7 @@ void PID::Twiddle() {
     if (CheckBetter() == true) {
       return;
     } else {
+      steps = 0;
       K[index] -= 2*dp[index];
       check = 2;
       ResetErrors();
@@ -139,7 +140,7 @@ void PID::Twiddle() {
 }
 
 void PID::EarlyReset(int twiddle_steps) {
-  std::cout<<"RESTARTED EARLY"<<std::endl;
+  std::cout<<"RESTARTED EARLY - CTE TO HIGH"<<std::endl;
   ss_error = 100 * twiddle_steps;
   Twiddle();
 }
