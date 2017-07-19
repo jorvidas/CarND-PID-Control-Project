@@ -6,15 +6,9 @@ Ki: 0
 Kd: 0.75
 */
 
-
-
 #include <uWS/uWS.h>
-#include <iostream>
 #include "json.hpp"
 #include "PID.h"
-#include <math.h>
-#include <fstream>
-#include <numeric>
 
 // for convenience
 using json = nlohmann::json;
@@ -63,10 +57,13 @@ int main()
   * TUNABLE PID PARAMTERS
   */
 
-  // for steering pid
-  double p[3] = {0.10549, 0.0064979, 0.802286};
-  // for speed pid
+  // coefficients for steering pid
+  // double p[3] = {0.110773, 0.00765538, 0.802286};
+  double p[3] = {0.119339, 0.00881286, 0.828008};
+  // coefficients for speed pid
   double s[3] = {0.3,0,0.5};
+  // dynamic target speed for speed pid
+  double desired_speed = 60.0;
 
   /*
   * OTHER INITIALIZATIONS
@@ -84,7 +81,7 @@ int main()
   double total_dp = 1e8;
 
 
-  h.onMessage([&pid, &total_dp, &is_twiddle, &speed_pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &total_dp, &is_twiddle, &speed_pid, &desired_speed](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -111,34 +108,33 @@ int main()
           // double max_steer = M_PI / 5.0;
 
           // used by speed_pid for target speed
-          double desired_speed = 40.0;
+          double max_speed = 45.0;
 
           // number of steps before sim restarts with new paramters
-          double twiddle_steps = 1525;
+          int twiddle_steps = 1525;
+
           // twiddle continues until sum of dp is less than the twiddle thres
-          double twiddle_thres = 0.005;
+          double twiddle_thres = 0.01;
+
           // limits how far a car can stray from the center of the road on a
           // successful run
-          double max_allowed_cte = 2.2;
+          double max_allowed_cte = 2.5;
+
           // limits the number of steps before sim will restart and change
           // paramters. this is meant to avoid multiple restarts if messages
           // come in to quickly
-          double min_steps = 15;
+          int min_steps = 15;
+
+          // for slowing down during turns
+          double min_turn_speed = 35.0;
+
+          // for calculating amount to slow - will target min turn speed
+          // at/above this number
+          double approx_max_steering_angle = 12.0;
+
 
           // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***
           // int steps_to_save = 100;
-
-          // filters out parameter sets that go off track but may have better
-          // normalized_ss_error
-          if ((pid.steps > min_steps) && (fabs(cte) > max_allowed_cte) && (is_twiddle)) {
-            pid.EarlyReset(twiddle_steps);
-            reset_sim(ws);
-            pid.steps = 0;
-            std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
-                     <<" (D) "<<pid.K[2]<<std::endl;
-            std::cout<< "Total DP:" << total_dp<< std::endl;
-            return;
-          }
 
           /*
           * CALCULATE STEER VALUE
@@ -150,12 +146,17 @@ int main()
           /*
           * CALCULATE THROTTLE
           */
-
+          // slow down on turns
+          desired_speed = max_speed - (max_speed - min_turn_speed) *
+          fabs(angle/approx_max_steering_angle);
+          // dont go below min speed if angle is larger than approx max
+          if (desired_speed < min_turn_speed) {desired_speed = min_turn_speed;}      
           speed_error = speed - desired_speed;
           speed_pid.UpdateError(speed_error);
           throttle = speed_pid.TotalError();
-          // release gas instead of breaking if you go over desired_speed
-          if (throttle < 0.0) {throttle = 0.0;}
+          // release gas instead of breaking if you go slightly over max_speed
+          // still break if steering angle requires slowing down
+          if ( (throttle < 0.0) && (throttle > (3*s[1])) ) {throttle = 0.0;}
 
           /* 
           * LIMIT STEERING ANGLE
@@ -171,12 +172,30 @@ int main()
           * TWIDDLE
           */
 
+          // filters out parameter sets that go off track but may have better
+          // normalized_ss_error and parameter sets that run too long or reset
+          // early
+          if ((pid.steps > min_steps) && (fabs(cte) > max_allowed_cte) && (is_twiddle)) {
+            pid.EarlyReset(twiddle_steps);
+            reset_sim(ws);
+            pid.steps = 0;
+            std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
+                     <<" (D) "<<pid.K[2]<<std::endl;
+            std::cout<< "Total DP :" << total_dp<< std::endl;
+            return;
+          }
+
+          // sometimes theres an issue with the restart and it gives a low
+          // error. this catches those
+          if ((pid.steps > (twiddle_steps + 150)) && (is_twiddle)) {
+            reset_sim(ws);
+            pid.steps = 0;
+            std::cout<<"RESTARTED EARLY - NO TWIDDLE"<<std::endl;
+          }
+
           // twiddle after twiddle_steps until sum(dp) < twiddle_thres.
-          // the two conditions are trying to avoid issues sometimes caused by
-          // data flow to h.onMessage causing missed restarts or double
-          // restarts.
-          if ( ((pid.steps == twiddle_steps) && (is_twiddle)) ||
-               ((pid.steps > (twiddle_steps + 50)) && (is_twiddle)) ) {
+          // set to == to try to avoid additional restarts due to onMessage()
+          if ( ((pid.steps == twiddle_steps) && (is_twiddle))) {
             pid.Twiddle();
             total_dp = (std::accumulate(std::begin(pid.dp), std::end(pid.dp), 0.0, std::plus<double>()));
             // stop twiddling and set to best parameters after twiddle_thres is
@@ -189,7 +208,7 @@ int main()
             reset_sim(ws);
             std::cout<<"Next coefficients: (P) "<<pid.K[0]<<" (I) "<<pid.K[1]
                      <<" (D) "<<pid.K[2]<<std::endl;
-            std::cout<< "Total DP:" << total_dp<< std::endl;
+            std::cout<< "Total DP : " << total_dp<< std::endl;
           }
 
           // DEBUGGING/MANUAL PARAMETER TUNING *** COMMENT OUT WHEN NOT USING ***

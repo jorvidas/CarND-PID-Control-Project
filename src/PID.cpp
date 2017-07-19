@@ -1,8 +1,4 @@
 #include "PID.h"
-#include <string>
-#include <fstream>
-#include <numeric>
-#include <iostream>
 
 using namespace std;
 
@@ -11,9 +7,9 @@ using namespace std;
 */
 
 PID::PID() {
-  dp[0] = 0.00528328;
+  dp[0] = 0.00328328;
   dp[1] = 0.00115748;
-  dp[2] = 0.0257217;
+  dp[2] = 0.0157217;
 
   untracked_steps = 100;
   min_tracked_steps = 100;
@@ -47,7 +43,7 @@ void PID::UpdateError(double cte) {
   d_error = cte - p_error;
   p_error = cte;
   if (steps > untracked_steps) {ss_error += cte*cte;}
-  if (cte > max_cte && steps > untracked_steps) {max_cte = cte;}
+  if (fabs(cte) > max_cte && steps > untracked_steps) {max_cte = fabs(cte);}
   steps++;
 }
 
@@ -68,13 +64,13 @@ double PID::TotalError() {
 
 bool PID::CheckBetter() {
   if (normalized_ss_error < best_error) {
+    steps = 0;
     best_error = normalized_ss_error;
     SaveCoefficients();
     dp[index] *= correct_dp_increase;
     index = (index + 1) % 3;
     K[index] += dp[index];
     check = 1;
-    steps = 0;
     ResetErrors();
     return true;
   } else {
@@ -87,7 +83,7 @@ void PID::SaveCoefficients() {
   ofstream ofs("best_coeff.txt", ios::out| ios::app);
   ofs<<"Coefficients: (P) "<<K[0]<<" (I) "<<K[1]<<" (D) "<<K[2]<<"\r\n";
   ofs<<"DP: (P) "<<dp[0]<<" (I) "<<dp[1]<<" (D) "<<dp[2]<<"\r\n";
-  ofs<<"Best error: "<<best_error<<"\r\n";
+  ofs<<"Best error: "<<best_error<<"\r\n\r\n";
   ofs.close();
 }
 
@@ -102,11 +98,11 @@ void PID::Twiddle() {
 
   // for the first run through
   if (check == 0) {
+    steps = 0;
     best_error = normalized_ss_error;
     SaveCoefficients();
     K[index] += dp[index];
     check = 1;
-    steps = 0;
     ResetErrors();
     return;
   }
@@ -130,12 +126,12 @@ void PID::Twiddle() {
       check = 1;
       return;
   } else {
+    steps = 0;
     K[index] += dp[index];
     dp[index] *= incorrect_dp_decrease;
     index = (index + 1) % 3;
     K[index] += dp[index];
     check = 1;
-    steps = 0;
     ResetErrors();
     return;
     }

@@ -3,6 +3,9 @@
 
 #include <string>
 #include <fstream>
+#include <math.h>
+#include <numeric>
+#include <iostream>
 
 class PID {
 public:
