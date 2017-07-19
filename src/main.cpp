@@ -54,7 +54,7 @@ int main()
 
   // coefficients for steering pid
   // double p[3] = {0.110773, 0.00765538, 0.802286};
-  double p[3] = {0.31051, 0.000938289, 4.22214};
+  double p[3] = {0.231662, 0.000443427, 2.35795};
   // coefficients for speed pid
   double s[3] = {0.3,0,0.5};
   // dynamic target speed for speed pid
@@ -110,7 +110,7 @@ int main()
 
           // limits how far a car can stray from the center of the road on a
           // successful run
-          double max_allowed_cte = 2.6;
+          double max_allowed_cte = 2.2;
 
           // limits the number of steps before sim will restart and change
           // paramters. this is meant to avoid multiple restarts if messages

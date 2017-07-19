@@ -7,14 +7,14 @@ using namespace std;
 */
 
 PID::PID() {
-  dp[0] = 0.18;
-  dp[1] = 0.01;
-  dp[2] = 2.11;
+  dp[0] = 0.02;
+  dp[1] = 0.0003;
+  dp[2] = .4;
 
   untracked_steps = 100;
   min_tracked_steps = 100;
-  correct_dp_increase = 1.1;
-  incorrect_dp_decrease = 0.9;
+  correct_dp_increase = 1.3;
+  incorrect_dp_decrease = 0.76;
 
   check = 0;
   index = 0;
@@ -93,7 +93,7 @@ void PID::Twiddle() {
   if (steps > (untracked_steps + min_tracked_steps)) {
     normalized_ss_error = ss_error / (steps - untracked_steps);
   } else {
-    ss_error = 1e8;
+    normalized_ss_error = 1e8 / steps;
   }
 
   // for the first run through
