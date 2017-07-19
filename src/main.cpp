@@ -111,7 +111,7 @@ int main()
           if ( (throttle < 0.0) && (throttle > (3*s[1])) ) {throttle = 0.0;}
           
           // // DEBUG
-          // std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
           // ofs<<"\r\n"<<cte<<" "<<pid.d_error<<" "<<pid.i_error<<" "<<cte*pid.Kp<<" "<<
           //      pid.d_error*pid.Kd<< " "<<pid.i_error*pid.Ki<< " "<<speed;
           // ofs.close();
