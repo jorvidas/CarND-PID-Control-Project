@@ -2,7 +2,7 @@
 #define PID_H
 
 class PID {
-public:
+ public:
   /*
   * Errors
   */
