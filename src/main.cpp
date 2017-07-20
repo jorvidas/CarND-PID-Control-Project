@@ -43,7 +43,7 @@ int main() {
 
   // create and initialize steering pid for controlling steer angle
   PID pid;
-  pid.Init(0.119339, 0.00881286, 0.828008);
+  pid.Init(0.237662, 0.000671427, 2.75795);
 
   // create and initialize speed pid for controlling throttle
   PID speed_pid;
